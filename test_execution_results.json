@@ -1,0 +1,42 @@
+{
+  "backend_valid": {
+    "status": 200,
+    "body": {
+      "potholes": [],
+      "real_image": "https://maps.googleapis.com/maps/api/streetview?size=800x450&location=24.8607,67.0011&heading=0&fov=90&key=AIzaSyCGnN6rb80018T3RvKGL_iVcS0eAup7Lr4",
+      "mode": "AI Ready"
+    }
+  },
+  "backend_invalid": {
+    "status": 422,
+    "body": {
+      "detail": [
+        {
+          "type": "float_parsing",
+          "loc": [
+            "body",
+            "lat"
+          ],
+          "msg": "Input should be a valid number, unable to parse string as a number",
+          "input": "abc"
+        }
+      ]
+    }
+  },
+  "nominatim": {
+    "status": 403,
+    "body_snippet": "Access denied. See https://operations.osmfoundation.org/policies/nominatim/"
+  },
+  "overpass": {
+    "status": 406,
+    "body_snippet": "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n<html><head>\n<title>406 Not Acceptable</title>\n</head><body>\n<h1>Not Acceptable</h1>\n<p>An appropriate repres"
+  },
+  "streetview": {
+    "status": 403,
+    "body_snippet": "The Google Maps Platform server rejected your request. You must enable Billing on the Google Cloud Project at https://console.cloud.google.com/project/_/billing/enable Learn more at https://developers"
+  },
+  "frontend_load": {
+    "status": 200,
+    "snippet": "<!doctype html>\r\n<html lang=\"en\">\r\n  <head>\n    <script type=\"module\">import { injectIntoGlobalHook } from \"/@react-refresh\";\ninjectIntoGlobalHook(window);\nwindow.$RefreshReg$ = () => {};\nwindow.$Refr"
+  }
+}
