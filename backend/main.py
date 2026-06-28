@@ -58,9 +58,15 @@ except Exception as e:
 # FastAPI
 # ─────────────────────────────────────────────────────
 app = FastAPI(title="Pothole AI — Streaming Scanner")
+
+FRONTEND_URL = "https://ai-based-pothole-detection.vercel.app"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        FRONTEND_URL,
+        "http://localhost:5173",  # local Vite dev server
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -461,9 +467,8 @@ async def scan_stream(lat: float, lng: float, radius: int = 400):
         generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control":               "no-cache",
-            "X-Accel-Buffering":           "no",
-            "Access-Control-Allow-Origin": "*",
+            "Cache-Control":     "no-cache",
+            "X-Accel-Buffering": "no",
         },
     )
 
@@ -559,4 +564,8 @@ def root():
             "endpoints": ["/scan-stream (GET+SSE)", "/scan-area (POST)", "/scan-upload (POST)"]}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8000)),
+    )
