@@ -7,7 +7,6 @@ import {
     Maximize, Minimize,
 } from 'lucide-react';
 import L from 'leaflet';
-import potholeLogo from "/logo.png";
 
 delete L.Icon.Default.prototype._getIconUrl;
 
