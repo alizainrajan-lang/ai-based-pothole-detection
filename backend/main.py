@@ -8,7 +8,6 @@ import osmnx as ox
 from shapely.geometry import LineString, MultiLineString
 import httpx
 import os
-import random
 import hashlib
 import tempfile
 import asyncio
@@ -85,17 +84,6 @@ class Location(BaseModel):
     lng: float
 
 # ─────────────────────────────────────────────────────
-# Demo images
-# ─────────────────────────────────────────────────────
-DEMO_IMAGES = [
-    "https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&q=80&w=800",
-    "https://images.unsplash.com/photo-1599740831464-5cbb14ee8704?auto=format&fit=crop&q=80&w=800",
-    "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=800",
-    "https://images.unsplash.com/photo-1588614959060-4d144f28b2ee?auto=format&fit=crop&q=80&w=800",
-    "https://images.unsplash.com/photo-1470240731273-7821a6eeb6bd?auto=format&fit=crop&q=80&w=800",
-]
-
-# ─────────────────────────────────────────────────────
 # SSE helper
 # ─────────────────────────────────────────────────────
 def sse(event: str, data: dict) -> str:
@@ -154,19 +142,21 @@ async def find_covered_point_async(client: httpx.AsyncClient, geometry: list):
 # ─────────────────────────────────────────────────────
 # Street View image URL
 # ─────────────────────────────────────────────────────
-def sv_url(lat: float, lng: float, heading: int = 0) -> str:
+def sv_url(lat: float, lng: float, heading: int = 0):
     if HAS_API_KEY:
         return (
             f"https://maps.googleapis.com/maps/api/streetview"
             f"?size=800x450&location={lat},{lng}"
             f"&heading={heading}&fov=90&pitch=-10&key={GOOGLE_API_KEY}"
         )
-    return random.choice(DEMO_IMAGES)
+    return None  # No API key configured — no Street View image available.
 
 # ─────────────────────────────────────────────────────
 # YOLO on URL
 # ─────────────────────────────────────────────────────
 async def run_yolo_url(client: httpx.AsyncClient, image_url: str):
+    if not image_url:
+        return []
     tmp = None
     try:
         r = await client.get(image_url, timeout=15)
@@ -395,39 +385,37 @@ async def scan_stream(lat: float, lng: float, radius: int = 400):
                     return
 
                 scan_lat, scan_lng = covered
+
+                if not HAS_API_KEY:
+                    yield_queue.put_nowait(sse("road_skipped", {
+                        "road_id":   road_id,
+                        "road_name": name,
+                        "path":      geometry,
+                        "reason":    "no_api_key",
+                    }))
+                    return
+
+                if not AI_ENABLED:
+                    yield_queue.put_nowait(sse("road_skipped", {
+                        "road_id":   road_id,
+                        "road_name": name,
+                        "path":      geometry,
+                        "reason":    "ai_disabled",
+                    }))
+                    return
+
                 url0 = sv_url(scan_lat, scan_lng, heading=0)
                 url1 = sv_url(scan_lat, scan_lng, heading=180)
 
                 potholes = []
 
-                if AI_ENABLED:
-                    async with httpx.AsyncClient(timeout=20) as client:
-                        r0, r1 = await asyncio.gather(
-                            run_yolo_url(client, url0),
-                            run_yolo_url(client, url1),
-                        )
-                    potholes += parse_detections(r0, scan_lat, scan_lng, geometry, name, road_id, heading=0)
-                    potholes += parse_detections(r1, scan_lat, scan_lng, geometry, name, road_id, heading=180)
-                else:
-                    # Demo mode: deterministic per-road "coin flip" instead of
-                    # random.random(), so the same road consistently does or
-                    # doesn't have a demo pothole across rescans, at a fixed
-                    # point along its path (no jitter).
-                    demo_roll = int(hashlib.sha1(f"demo|{road_id}".encode()).hexdigest()[:4], 16) / 0xFFFF
-                    if demo_roll < 0.5:
-                        path_idx = len(geometry) // 2
-                        snap = geometry[path_idx]
-                        stable_id = int(hashlib.sha1(f"{road_id}|{path_idx}|demo".encode()).hexdigest()[:10], 16)
-                        potholes.append({
-                            "id":        stable_id,
-                            "lat":       snap[0],
-                            "lng":       snap[1],
-                            "severity":  ["High", "Medium", "Medium", "Low"][stable_id % 4],
-                            "timestamp": "Demo scan",
-                            "road":      name,
-                            "path":      geometry,
-                            "conf":      None,
-                        })
+                async with httpx.AsyncClient(timeout=20) as client:
+                    r0, r1 = await asyncio.gather(
+                        run_yolo_url(client, url0),
+                        run_yolo_url(client, url1),
+                    )
+                potholes += parse_detections(r0, scan_lat, scan_lng, geometry, name, road_id, heading=0)
+                potholes += parse_detections(r1, scan_lat, scan_lng, geometry, name, road_id, heading=180)
 
                 roads_scanned  += 1
                 potholes_total += len(potholes)
@@ -490,26 +478,16 @@ async def scan_area(req: AreaScan):
                 covered = await find_covered_point_async(client, road["geometry"])
             if not covered:
                 return [], None, False
+            if not HAS_API_KEY or not AI_ENABLED:
+                return [], None, False
             slat, slng = covered
             u0 = sv_url(slat, slng, 0)
             u1 = sv_url(slat, slng, 180)
             potholes = []
-            if AI_ENABLED:
-                async with httpx.AsyncClient(timeout=20) as client:
-                    r0, r1 = await asyncio.gather(run_yolo_url(client, u0), run_yolo_url(client, u1))
-                potholes += parse_detections(r0, slat, slng, road["geometry"], road["name"], road["id"], heading=0)
-                potholes += parse_detections(r1, slat, slng, road["geometry"], road["name"], road["id"], heading=180)
-            else:
-                demo_roll = int(hashlib.sha1(f"demo|{road['id']}".encode()).hexdigest()[:4], 16) / 0xFFFF
-                if demo_roll < 0.5:
-                    path_idx = len(road["geometry"]) // 2
-                    snap = road["geometry"][path_idx]
-                    stable_id = int(hashlib.sha1(f"{road['id']}|{path_idx}|demo".encode()).hexdigest()[:10], 16)
-                    potholes.append({"id": stable_id,
-                        "lat": snap[0], "lng": snap[1],
-                        "severity": ["High", "Medium", "Medium", "Low"][stable_id % 4],
-                        "timestamp": "Demo", "road": road["name"],
-                        "path": road["geometry"], "conf": None})
+            async with httpx.AsyncClient(timeout=20) as client:
+                r0, r1 = await asyncio.gather(run_yolo_url(client, u0), run_yolo_url(client, u1))
+            potholes += parse_detections(r0, slat, slng, road["geometry"], road["name"], road["id"], heading=0)
+            potholes += parse_detections(r1, slat, slng, road["geometry"], road["name"], road["id"], heading=180)
             return potholes, u0, True
 
     results       = await asyncio.gather(*[scan_one(r) for r in roads])
