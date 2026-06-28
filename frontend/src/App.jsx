@@ -90,8 +90,8 @@ function FullscreenMapSync({ isFullscreen, center, radiusMeters }) {
     return null;
 }
 
-const BACKEND = 'https://ai-based-pothole-detection.onrender.com';
-
+// const BACKEND = 'https://ai-based-pothole-detection.onrender.com';
+const BACKEND = 'http://localhost:8000';
 // How far (meters) the GPS has to drift from the last scan origin before
 // we treat it as "the user actually moved" and kick off a new scan.
 // Anything smaller is just GPS jitter and should NOT restart scanning.
