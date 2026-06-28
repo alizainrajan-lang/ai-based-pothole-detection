@@ -1,16 +1,12 @@
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-httpx==0.27.0
-requests==2.32.3
-python-multipart==0.0.9
-pydantic==2.7.4
-
-# AI / model stack — pinned to avoid checkpoint-incompatibility errors
-# like "'Conv' object has no attribute 'bn'", which happens when a much
-# newer ultralytics/torch loads a checkpoint saved by an older version.
-torch==2.3.1
-ultralytics==8.2.18
-
-# Geo / OSM stack
-osmnx==1.9.3
-shapely==2.0.4
+fastapi
+uvicorn[standard]
+ultralytics
+opencv-python
+requests
+python-multipart
+python-dotenv
+httpx
+osmnx 
+geopandas 
+shapely
+networkx
